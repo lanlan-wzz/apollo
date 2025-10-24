@@ -94,3 +94,5 @@ var config_export_module = angular.module('config_export', ['app.service', 'apol
 var audit_log_menu_module = angular.module('audit_log', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);
 //audit log trace detail
 var audit_log_trace_detail_module = angular.module('audit_log_trace_detail', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);
+//role template
+var roleTemplate_module = angular.module('roleTemplate', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar', 'pascalprecht.translate']);

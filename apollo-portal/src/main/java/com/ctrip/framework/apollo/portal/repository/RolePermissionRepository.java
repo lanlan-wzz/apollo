@@ -38,4 +38,6 @@ public interface RolePermissionRepository extends PagingAndSortingRepository<Rol
   @Modifying
   @Query("UPDATE RolePermission SET IsDeleted = true, DeletedAt = ROUND(UNIX_TIMESTAMP(NOW(4))*1000), DataChange_LastModifiedBy = ?2 WHERE PermissionId in ?1 and IsDeleted = false")
   Integer batchDeleteByPermissionIds(List<Long> permissionIds, String operator);
+  // 🆕 新增方法：根据 RoleId 和 PermissionId 查询
+  RolePermission findByRoleIdAndPermissionId(Long roleId, Long permissionId);
 }

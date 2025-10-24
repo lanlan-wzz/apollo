@@ -17,7 +17,7 @@ spring:
   application:
     name: apollo-configservice
   profiles:
-    active: ${apollo_profile}
+    active: github
   cloud:
     consul:
       enabled: false

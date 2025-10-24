@@ -1,0 +1,335 @@
+<!--
+  ~ Copyright 2024 Apollo Authors
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  -->
+<!doctype html>
+<html ng-app="roleTemplate">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <link rel="icon" href="img/config.png">
+    <!-- styles -->
+    <link rel="stylesheet" type="text/css" href="vendor/bootstrap/css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="vendor/angular/angular-toastr-1.4.1.min.css">
+    <link rel="stylesheet" type="text/css" media='all' href="vendor/angular/loading-bar.min.css">
+    <link rel="stylesheet" type="text/css" href="styles/common-style.css">
+    <link rel="stylesheet" type="text/css" href="vendor/select2/select2.min.css">
+    <title>角色模板管理</title>
+    <style>
+        .template-card {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background-color: #fff;
+            transition: box-shadow 0.3s;
+            cursor: pointer;
+        }
+
+        .template-card:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .template-card h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .template-card p {
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .template-stats {
+            color: #999;
+            font-size: 13px;
+        }
+
+        .template-stats span {
+            margin-right: 15px;
+        }
+
+        .template-meta {
+            color: #999;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        .app-permission-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            background-color: #fafafa;
+        }
+
+        .app-permission-header {
+            padding: 12px 15px;
+            background-color: #f5f5f5;
+            border-bottom: 1px solid #e0e0e0;
+            cursor: pointer;
+        }
+
+        .app-permission-body {
+            padding: 15px;
+        }
+
+        .namespace-item {
+            padding: 10px;
+            border-left: 3px solid #5cb85c;
+            background-color: #fff;
+            margin-bottom: 10px;
+        }
+
+        .permission-checkbox-group {
+            margin-top: 10px;
+        }
+
+        .permission-checkbox-group label {
+            margin-right: 20px;
+            font-weight: normal;
+        }
+
+        .modal-body-scroll {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .step-indicator {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .step-indicator .step {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            line-height: 40px;
+            border-radius: 50%;
+            background-color: #ddd;
+            color: #fff;
+            margin: 0 10px;
+            font-weight: bold;
+        }
+
+        .step-indicator .step.active {
+            background-color: #5cb85c;
+        }
+
+        .step-indicator .arrow {
+            color: #ddd;
+            font-size: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+<apollonav></apollonav>
+
+<div class="container-fluid" ng-controller="RoleTemplateController">
+    <div class="col-md-10 col-md-offset-1 panel">
+
+        <!-- 权限检查 -->
+        <section class="panel-body" ng-show="isRootUser">
+
+            <!-- 页面标题和操作按钮 -->
+            <div class="row">
+                <div class="col-md-8">
+                    <h4>系统管理 > 角色模板管理
+                        <small>统一管理用户角色和权限</small>
+                    </h4>
+                </div>
+                <div class="col-md-4 text-right">
+                    <button type="button" class="btn btn-success" ng-click="showCreateTemplateModal()">
+                        <span class="glyphicon glyphicon-plus"></span>
+                        新建角色模板
+                    </button>
+                </div>
+            </div>
+
+            <hr>
+
+            <!-- 搜索栏 -->
+            <div class="row" style="margin-bottom: 20px;">
+                <div class="col-md-8">
+                    <div class="input-group">
+                        <span class="input-group-addon">
+                            <span class="glyphicon glyphicon-search"></span>
+                        </span>
+                        <input type="text" class="form-control"
+                               placeholder="搜索角色模板..."
+                               ng-model="searchKey"
+                               ng-change="searchTemplates()">
+                    </div>
+                </div>
+                <div class="col-md-4 text-right">
+                    <button type="button" class="btn btn-default" ng-click="loadTemplates()">
+                        <span class="glyphicon glyphicon-refresh"></span>
+                        刷新
+                    </button>
+                </div>
+            </div>
+
+            <!-- 加载中 -->
+            <div class="row" ng-show="loading">
+                <div class="col-md-12 text-center" style="padding: 50px;">
+                    <h4>加载中...</h4>
+                </div>
+            </div>
+
+            <!-- 角色模板列表 -->
+            <div class="row" ng-show="!loading && filteredTemplates.length > 0">
+                <div class="col-md-12">
+                    <div class="template-card" ng-repeat="template in filteredTemplates"
+                         ng-click="showTemplateDetail(template.templateName)">
+                        <h4>
+                            📋 {{ template.templateName }}
+                        </h4>
+                        <p>{{ template.description || '暂无描述' }}</p>
+                        <div class="template-stats">
+                            <span>
+                                <span class="glyphicon glyphicon-user"></span>
+                                {{ template.userCount || 0 }}人
+                            </span>
+                            <span>
+                                <span class="glyphicon glyphicon-phone"></span>
+                                {{ template.appCount || 0 }}个应用
+                            </span>
+                            <span>
+                                <span class="glyphicon glyphicon-lock"></span>
+                                {{ template.systemPermissionCount || 0 }}个系统权限
+                            </span>
+                        </div>
+                        <div class="template-meta">
+                            创建人：{{ template.dataChangeCreatedBy || 'N/A' }} |
+                            {{ template.dataChangeCreatedTime | date:'yyyy-MM-dd HH:mm' }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 空状态 -->
+            <div class="row" ng-show="!loading && filteredTemplates.length === 0">
+                <div class="col-md-12 text-center" style="padding: 50px;">
+                    <span class="glyphicon glyphicon-inbox" style="font-size: 48px; color: #ddd;"></span>
+                    <p style="color: #999; margin-top: 20px;">暂无角色模板</p>
+                    <button type="button" class="btn btn-success" ng-click="showCreateTemplateModal()">
+                        创建第一个角色模板
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- 无权限提示 -->
+        <section class="panel-body text-center" ng-if="!isRootUser">
+            <h4>只有超级管理员可以管理角色模板</h4>
+        </section>
+
+    </div>
+
+<!-- ==================== 创建角色模板模态框 ==================== -->
+<div class="modal fade" id="createTemplateModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form ng-submit="confirmCreateTemplate()">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                    <h4 class="modal-title">新建角色模板</h4>
+                </div>
+                <div class="modal-body">
+                    <div class="form-horizontal">
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label">
+                                <apollorequiredfield></apollorequiredfield>
+                                模板名称
+                            </label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control"
+                                       ng-model="newTemplate.templateName"
+                                       placeholder="例如：开发组"
+                                       required
+                                       autofocus>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label">描述</label>
+                            <div class="col-sm-9">
+                                <textarea class="form-control" rows="3"
+                                          ng-model="newTemplate.description"
+                                          placeholder="描述该角色模板的用途"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-sm-offset-3 col-sm-9">
+                                <p class="help-block">
+                                    <span class="glyphicon glyphicon-info-sign"></span>
+                                    创建后可以配置系统权限和应用权限
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">确定</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+</div><!-- 关闭 ng-controller="RoleTemplateController" 的作用域 -->
+
+<div ng-include="'views/common/footer.html'"></div>
+
+<!-- jquery.js -->
+<script src="vendor/jquery.min.js" type="text/javascript"></script>
+
+<!--angular-->
+<script src="vendor/angular/angular.min.js"></script>
+<script src="vendor/angular/angular-route.min.js"></script>
+<script src="vendor/angular/angular-resource.min.js"></script>
+<script src="vendor/angular/angular-toastr-1.4.1.tpls.min.js"></script>
+<script src="vendor/angular/loading-bar.min.js"></script>
+<script src="vendor/angular/angular-cookies.min.js"></script>
+
+<script src="vendor/angular/angular-translate.2.18.1/angular-translate.min.js"></script>
+<script src="vendor/angular/angular-translate.2.18.1/angular-translate-loader-static-files.min.js"></script>
+<script src="vendor/angular/angular-translate.2.18.1/angular-translate-storage-cookie.min.js"></script>
+
+<!--valdr-->
+<script src="vendor/valdr/valdr.min.js" type="text/javascript"></script>
+<script src="vendor/valdr/valdr-message.min.js" type="text/javascript"></script>
+
+<!-- bootstrap.js -->
+<script src="vendor/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
+
+<script src="vendor/lodash.min.js"></script>
+<script src="vendor/select2/select2.min.js" type="text/javascript"></script>
+
+<!--biz-->
+<!--must import-->
+<script type="application/javascript" src="scripts/app.js"></script>
+<script type="application/javascript" src="scripts/services/AppService.js"></script>
+<script type="application/javascript" src="scripts/services/EnvService.js"></script>
+<script type="application/javascript" src="scripts/services/UserService.js"></script>
+<script type="application/javascript" src="scripts/services/CommonService.js"></script>
+<script type="application/javascript" src="scripts/services/PermissionService.js"></script>
+<script type="application/javascript" src="scripts/services/RoleTemplateService.js"></script>
+
+<script type="application/javascript" src="scripts/AppUtils.js"></script>
+<script type="application/javascript" src="scripts/PageCommon.js"></script>
+<script type="application/javascript" src="scripts/directive/directive.js"></script>
+<script type="application/javascript" src="scripts/valdr.js"></script>
+
+<script type="application/javascript" src="scripts/controller/role/RoleTemplateController.js"></script>
+</body>
+
+</html>

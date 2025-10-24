@@ -48,4 +48,7 @@ public interface UserRoleRepository extends PagingAndSortingRepository<UserRole,
   @Query("UPDATE UserRole SET IsDeleted = true, DeletedAt = ROUND(UNIX_TIMESTAMP(NOW(4))*1000), DataChange_LastModifiedBy = ?2 WHERE RoleId in ?1 and IsDeleted = false")
   Integer batchDeleteByRoleIds(List<Long> roleIds, String operator);
 
+  // 🆕 新增方法：根据 UserId 和 RoleId 查询
+  UserRole findByUserIdAndRoleId(String userId, Long roleId);
+
 }

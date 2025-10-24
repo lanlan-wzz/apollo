@@ -1,0 +1,811 @@
+<!doctype html>
+<html ng-app="roleTemplate">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <link rel="icon" href="img/config.png">
+    <!-- styles -->
+    <link rel="stylesheet" type="text/css" href="vendor/bootstrap/css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="vendor/angular/angular-toastr-1.4.1.min.css">
+    <link rel="stylesheet" type="text/css" media='all' href="vendor/angular/loading-bar.min.css">
+    <link rel="stylesheet" type="text/css" href="styles/common-style.css">
+    <link rel="stylesheet" type="text/css" href="vendor/select2/select2.min.css">
+    <title>角色模板详情 - {{templateName}}</title>
+    <style>
+        /* 紧凑布局样式 */
+        .compact-panel {
+            margin-bottom: 15px;
+        }
+
+        .compact-panel .panel-heading {
+            padding: 8px 15px;
+        }
+
+        .compact-panel .panel-body {
+            padding: 10px 15px;
+        }
+
+        .compact-form-group {
+            margin-bottom: 8px;
+        }
+
+        .permission-item {
+            margin-bottom: 5px;
+        }
+
+        .app-list-item {
+            padding: 8px 12px;
+            margin-bottom: 3px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .app-list-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .app-list-item.active {
+            background-color: #337ab7;
+            color: white;
+            border-color: #337ab7;
+        }
+
+        .permission-config-section {
+            margin-bottom: 15px;
+        }
+
+        .namespace-cluster-item {
+            padding: 8px 12px;
+            margin-bottom: 5px;
+            border: 1px solid #d9edf7;
+            border-radius: 4px;
+            background-color: #f4f8fa;
+        }
+    </style>
+</head>
+
+<body>
+
+<apollonav></apollonav>
+
+<div class="container-fluid" ng-controller="RoleTemplateDetailController">
+
+    <!-- 页面头部 -->
+    <div class="panel panel-default compact-panel">
+        <div class="panel-heading">
+            <div class="row">
+                <div class="col-md-8">
+                    <h4 style="margin: 0;">
+                        <a href="role-template.html" class="text-muted">
+                            <span class="glyphicon glyphicon-chevron-left"></span>
+                        </a>
+                        {{templateDetail.templateName}} - 权限管理详情页
+                    </h4>
+                    <small class="text-muted">
+                        共 {{getSystemPermissionCount()}} 个系统权限，{{getAppCount()}} 个应用
+                    </small>
+                </div>
+                <div class="col-md-4 text-right">
+                    <button type="button" class="btn btn-info btn-sm"
+                            ng-click="showAssignedUsersModal()">
+                        <span class="glyphicon glyphicon-user"></span>
+                        已分配用户 ({{templateDetail.userCount || 0}})
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm"
+                            ng-click="deleteTemplate()">
+                        <span class="glyphicon glyphicon-trash"></span>
+                        删除模板
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 系统权限区域 -->
+    <div class="panel panel-default compact-panel">
+        <div class="panel-heading">
+            <h5 style="margin: 0;">
+                <span class="glyphicon glyphicon-cog"></span>
+                系统权限
+                <small class="text-muted">- 系统权限不绑定具体应用，适用于管理员角色</small>
+            </h5>
+        </div>
+        <div class="panel-body">
+            <div ng-show="templateDetail.loadingSummary" class="text-center">
+                <span class="glyphicon glyphicon-refresh glyphicon-spin"></span>
+                加载中...
+            </div>
+
+            <div ng-show="!templateDetail.loadingSummary">
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="form-group compact-form-group"
+                             ng-repeat="(permType, config) in systemPermissionConfigs">
+                            <div class="permission-item">
+                                <label class="checkbox-inline">
+                                    <input type="checkbox"
+                                           ng-model="systemPermissionStates[permType]"
+                                           ng-change="updateSystemPermission(permType)">
+                                    <strong>{{config.displayName}}</strong>
+                                    <span class="text-muted">- {{config.description}}</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 应用权限区域 -->
+    <div class="panel panel-default compact-panel">
+        <div class="panel-heading">
+            <div class="row">
+                <div class="col-md-8">
+                    <h5 style="margin: 0;">
+                        <span class="glyphicon glyphicon-th-list"></span>
+                        应用权限
+                    </h5>
+                </div>
+                <div class="col-md-4 text-right">
+                    <button type="button" class="btn btn-success btn-sm"
+                            ng-click="showAddAppsModal()">
+                        <span class="glyphicon glyphicon-plus"></span>
+                        添加应用
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel-body">
+            <!-- 搜索框 -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group compact-form-group">
+                        <input type="text" class="form-control input-sm"
+                               placeholder="搜索应用..."
+                               ng-model="appSearchKey">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <small class="text-muted pull-right">
+                        {{getFilteredApps().length}} 个应用
+                    </small>
+                </div>
+            </div>
+
+            <div ng-show="templateDetail.loadingSummary" class="text-center">
+                <span class="glyphicon glyphicon-refresh glyphicon-spin"></span><br>
+                加载中...
+            </div>
+
+            <div ng-show="!templateDetail.loadingSummary">
+                <div class="row">
+                    <!-- 应用列表 -->
+                    <div class="col-md-3">
+                        <!-- 应用项 -->
+                        <div ng-repeat="app in getFilteredApps()">
+                            <div class="app-list-item"
+                                 ng-class="{active: selectedApp && selectedApp.appId === app.appId}"
+                                 ng-click="selectApp(app)">
+                                <div class="row">
+                                    <div class="col-xs-10">
+                                        <strong>{{app.appId}}</strong><br>
+                                        <small class="text-muted">{{getAppPermissionStats(app)}}</small>
+                                    </div>
+                                    <div class="col-xs-2 text-right">
+                                        <button type="button" class="btn btn-danger btn-xs"
+                                                ng-click="removeAppFromTemplate(app.appId); $event.stopPropagation();"
+                                                title="移除应用">
+                                            <span class="glyphicon glyphicon-remove"></span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 空状态 -->
+                        <div ng-show="getFilteredApps().length === 0" class="text-center text-muted">
+                            <p ng-show="!appSearchKey">暂无应用权限</p>
+                            <p ng-show="appSearchKey">未找到匹配的应用</p>
+                            <button type="button" class="btn btn-success btn-sm"
+                                    ng-click="showAddAppsModal()" ng-show="!appSearchKey">
+                                添加第一个应用
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 权限配置区域 -->
+                    <div class="col-md-9">
+                        <div ng-show="!selectedApp" class="text-center text-muted" style="padding: 50px 0;">
+                            <span class="glyphicon glyphicon-arrow-left"></span>
+                            请从左侧选择一个应用来配置权限
+                        </div>
+
+                        <div ng-show="selectedApp">
+                            <h5 style="margin-top: 0;">
+                                <span class="glyphicon glyphicon-th"></span>
+                                {{selectedApp.appId}} 权限配置
+                            </h5>
+
+                            <!-- 应用级权限 -->
+                            <div class="permission-config-section">
+                                <div class="panel panel-info compact-panel">
+                                    <div class="panel-heading">
+                                        <h6 style="margin: 0;">应用级权限</h6>
+                                    </div>
+                                    <div class="panel-body">
+                                        <div class="row">
+                                            <div class="col-md-12">
+                                                <label class="checkbox-inline permission-item"
+                                                       ng-repeat="(permType, config) in appLevelPermissionConfigs">
+                                                    <input type="checkbox"
+                                                           ng-model="selectedAppPermissions.appLevel[permType]"
+                                                           ng-change="updateAppLevelPermission(permType)">
+                                                    {{config.displayName}}
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 命名空间权限 -->
+                            <div class="permission-config-section">
+                                <div class="panel panel-info compact-panel">
+                                    <div class="panel-heading clearfix">
+                                        <h6 class="pull-left" style="margin: 0;">命名空间权限</h6>
+                                        <button type="button" class="btn btn-success btn-xs pull-right"
+                                                ng-click="showAddNamespaceModal()">
+                                            <span class="glyphicon glyphicon-plus"></span>
+                                            添加命名空间
+                                        </button>
+                                    </div>
+                                    <div class="panel-body">
+                                        <div ng-show="selectedApp.namespacePermissions.length === 0"
+                                             class="text-muted text-center">
+                                            暂无命名空间权限
+                                        </div>
+
+                                        <div class="namespace-cluster-item"
+                                             ng-repeat="ns in selectedApp.namespacePermissions">
+                                            <div class="row">
+                                                <div class="col-md-10">
+                                                    <strong>{{ns.namespaceName}}</strong>
+                                                    <span class="label label-default label-sm">{{ns.env || '所有环境'}}</span>
+                                                    <br>
+                                                    <small>
+                            <span ng-repeat="permType in ns.permissions">
+                              <span class="label label-info label-sm">{{getPermissionDisplayName(permType)}}</span>
+                            </span>
+                                                    </small>
+                                                </div>
+                                                <div class="col-md-2 text-right">
+                                                    <button type="button" class="btn btn-danger btn-xs"
+                                                            ng-click="removeNamespacePermission(ns)">
+                                                        删除
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 集群权限 -->
+                            <div class="permission-config-section">
+                                <div class="panel panel-info compact-panel">
+                                    <div class="panel-heading clearfix">
+                                        <h6 class="pull-left" style="margin: 0;">集群权限</h6>
+                                        <button type="button" class="btn btn-success btn-xs pull-right"
+                                                ng-click="showAddClusterModal()">
+                                            <span class="glyphicon glyphicon-plus"></span>
+                                            添加集群
+                                        </button>
+                                    </div>
+                                    <div class="panel-body">
+                                        <div ng-show="selectedApp.clusterPermissions.length === 0"
+                                             class="text-muted text-center">
+                                            暂无集群权限
+                                        </div>
+
+                                        <div class="namespace-cluster-item"
+                                             ng-repeat="cluster in selectedApp.clusterPermissions">
+                                            <div class="row">
+                                                <div class="col-md-10">
+                                                    <strong>{{cluster.clusterName}}</strong>
+                                                    <span class="label label-primary label-sm">{{cluster.env}}</span>
+                                                    <br>
+                                                    <small>
+                            <span ng-repeat="permType in cluster.permissions">
+                              <span class="label label-info label-sm">{{getPermissionDisplayName(permType)}}</span>
+                            </span>
+                                                    </small>
+                                                </div>
+                                                <div class="col-md-2 text-right">
+                                                    <button type="button" class="btn btn-danger btn-xs"
+                                                            ng-click="removeClusterPermission(cluster)">
+                                                        删除
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================== 添加应用模态框 ==================== -->
+    <div class="modal fade" id="addAppsModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" ng-click="cancelAddApps()">
+                        <span>&times;</span>
+                    </button>
+                    <h4 class="modal-title">添加应用到角色模板</h4>
+                </div>
+                <div class="modal-body">
+                    <!-- 第一步：选择应用 -->
+                    <div ng-show="addAppsData && addAppsData.currentStep === 1">
+                        <h5>第一步：选择应用</h5>
+                        <hr>
+
+                        <!-- 加载状态 -->
+                        <div ng-show="addAppsData && addAppsData.loadingApps" class="text-center"
+                             style="padding: 50px 0;">
+                            <span class="glyphicon glyphicon-refresh glyphicon-spin" style="font-size: 24px;"></span>
+                            <p class="text-muted">正在加载应用列表...</p>
+                        </div>
+
+                        <!-- 应用列表内容 -->
+                        <div ng-show="addAppsData && !addAppsData.loadingApps">
+                            <!-- 搜索框 -->
+                            <div class="form-group">
+                                <input type="text" class="form-control"
+                                       placeholder="搜索应用ID或名称..."
+                                       ng-model="addAppsData.searchAppKey">
+                            </div>
+
+                            <!-- 应用列表 -->
+                            <div class="well" style="max-height: 300px; overflow-y: auto;">
+                                <div>
+                                    <label>
+                                        <input type="checkbox" ng-model="addAppsData.selectAllApps"
+                                               ng-click="toggleSelectAllApps()">
+                                        全选
+                                    </label>
+                                </div>
+                                <hr>
+                                <div ng-repeat="app in searchApps()">
+                                    <label class="checkbox-inline">
+                                        <input type="checkbox"
+                                               ng-checked="isAppSelected(app)"
+                                               ng-click="toggleAppSelection(app)">
+                                        <strong>{{ app.appId }}</strong>
+                                        <span class="text-muted" ng-if="app.name">{{ app.name }}</span>
+                                    </label>
+                                </div>
+                                <div class="text-center text-muted"
+                                     ng-show="searchApps().length === 0">
+                                    没有找到应用
+                                </div>
+                            </div>
+                            <p class="text-muted">
+                                已选择 {{ (addAppsData && addAppsData.selectedApps ? addAppsData.selectedApps.length :
+                                0) }}
+                                个应用
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- 第二步：配置权限 -->
+                    <div ng-show="addAppsData && addAppsData.currentStep === 2">
+                        <h5>第二步：设置默认权限（可选）</h5>
+                        <p class="help-block">
+                            为选中的应用批量设置权限，添加后还可以单独调整
+                        </p>
+                        <hr>
+                        <form class="form-horizontal">
+                            <!-- 应用级权限 -->
+                            <div class="form-group">
+                                <label class="col-sm-3 control-label">应用级权限：</label>
+                                <div class="col-sm-9">
+                                    <label class="checkbox-inline">
+                                        <input type="checkbox"
+                                               ng-model="addAppsData.defaultPermissions.CreateNamespace">
+                                        创建命名空间
+                                    </label>
+                                    <label class="checkbox-inline">
+                                        <input type="checkbox"
+                                               ng-model="addAppsData.defaultPermissions.CreateCluster">
+                                        创建集群
+                                    </label>
+                                    <label class="checkbox-inline">
+                                        <input type="checkbox"
+                                               ng-model="addAppsData.defaultPermissions.AssignRole">
+                                        分配角色
+                                    </label>
+                                </div>
+                            </div>
+                            <hr>
+                            <!-- Namespace权限 -->
+                            <div class="form-group">
+                                <label class="col-sm-3 control-label">Namespace 权限：</label>
+                                <div class="col-sm-9">
+                                    <div class="form-group">
+                                        <label>Namespace:</label>
+                                        <input type="text" class="form-control"
+                                               ng-model="addAppsData.defaultNamespace" placeholder="application">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>环境:</label>
+                                        <select class="form-control" ng-model="addAppsData.defaultEnv">
+                                            <option value="">所有环境</option>
+                                            <option ng-repeat="env in environments" value="{{ env }}">{{ env }}</option>
+                                        </select>
+                                    </div>
+                                    <label class="checkbox-inline">
+                                        <input type="checkbox"
+                                               ng-model="addAppsData.defaultPermissions.ModifyNamespace">
+                                        修改配置
+                                    </label>
+                                    <label class="checkbox-inline">
+                                        <input type="checkbox"
+                                               ng-model="addAppsData.defaultPermissions.ReleaseNamespace">
+                                        发布配置
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <div class="col-sm-offset-3 col-sm-9">
+                                    <label class="checkbox-inline">
+                                        <input type="checkbox" ng-model="addAppsData.skipDefaultPermissions">
+                                        跳过，稍后单独配置
+                                    </label>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" ng-click="cancelAddApps()">取消</button>
+                    <button type="button" class="btn btn-default"
+                            ng-show="addAppsData && addAppsData.currentStep === 2"
+                            ng-click="previousStepToApps()">
+                        <span class="glyphicon glyphicon-chevron-left"></span>
+                        上一步
+                    </button>
+                    <button type="button" class="btn btn-primary"
+                            ng-show="addAppsData && addAppsData.currentStep === 1"
+                            ng-click="nextStepToPermissions()"
+                            ng-disabled="addAppsData && addAppsData.loadingApps">
+                        下一步
+                        <span class="glyphicon glyphicon-chevron-right"></span>
+                    </button>
+                    <button type="button" class="btn btn-primary"
+                            ng-show="addAppsData && addAppsData.currentStep === 2"
+                            ng-click="confirmAddApps()">
+                        确定
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================== 添加Namespace模态框 ==================== -->
+    <div class="modal fade" id="addNamespaceModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                    <h4 class="modal-title">添加 Namespace 权限</h4>
+                </div>
+                <div class="modal-body">
+                    <form class="form-horizontal">
+                        <div class="form-group">
+                            <label class="col-sm-12">
+                                <strong>应用：{{ selectedApp.appId }}</strong>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label">
+                                <apollorequiredfield></apollorequiredfield>
+                                Namespace
+                            </label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control"
+                                       ng-model="addNamespaceData.namespaceName"
+                                       placeholder="application">
+                                <small class="help-block">
+                                    可选：application, database, redis 等
+                                </small>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label">环境</label>
+                            <div class="col-sm-9">
+                                <select class="form-control" ng-model="addNamespaceData.env">
+                                    <option value="">所有环境</option>
+                                    <option ng-repeat="env in environments" value="{{ env }}">{{ env }}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label">
+                                <apollorequiredfield></apollorequiredfield>
+                                权限类型
+                            </label>
+                            <div class="col-sm-9">
+                                <label class="checkbox-inline">
+                                    <input type="checkbox"
+                                           ng-model="addNamespaceData.permissions.ModifyNamespace">
+                                    修改配置 (ModifyNamespace)
+                                </label>
+                                <label class="checkbox-inline">
+                                    <input type="checkbox"
+                                           ng-model="addNamespaceData.permissions.ReleaseNamespace">
+                                    发布配置 (ReleaseNamespace)
+                                </label>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" ng-click="confirmAddNamespace()">确定</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 添加集群模态框 ==================== -->
+    <div class="modal fade" id="addClusterModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                    <h4 class="modal-title">添加集群权限</h4>
+                </div>
+                <div class="modal-body">
+                    <form class="form-horizontal">
+                        <div class="form-group">
+                            <label class="col-sm-12">
+                                <strong>应用：{{ selectedApp.appId }}</strong>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label">
+                                <apollorequiredfield></apollorequiredfield>
+                                集群名称
+                            </label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control"
+                                       ng-model="addClusterData.clusterName"
+                                       placeholder="default">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label">
+                                <apollorequiredfield></apollorequiredfield>
+                                环境
+                            </label>
+                            <div class="col-sm-9">
+                                <select class="form-control" ng-model="addClusterData.env" required>
+                                    <option value="">请选择环境</option>
+                                    <option ng-repeat="env in environments" value="{{ env }}">{{ env }}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label">
+                                <apollorequiredfield></apollorequiredfield>
+                                权限类型
+                            </label>
+                            <div class="col-sm-9">
+                                <label class="checkbox-inline">
+                                    <input type="checkbox"
+                                           ng-model="addClusterData.permissions.ModifyNamespacesInCluster">
+                                    修改集群下所有命名空间
+                                </label>
+                                <label class="checkbox-inline">
+                                    <input type="checkbox"
+                                           ng-model="addClusterData.permissions.ReleaseNamespacesInCluster">
+                                    发布集群下所有命名空间
+                                </label>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" ng-click="confirmAddCluster()">确定</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 已分配用户管理模态框 ==================== -->
+    <div class="modal fade" id="assignedUsersModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                    <h4 class="modal-title">
+                        角色模板：{{ templateDetail.templateName }} - 已分配用户
+                    </h4>
+                </div>
+                <div class="modal-body">
+                    <!-- 添加用户按钮 -->
+                    <div class="form-group">
+                        <button type="button" class="btn btn-success"
+                                ng-click="showAssignUsersModal()">
+                            <span class="glyphicon glyphicon-plus"></span>
+                            添加用户
+                        </button>
+                    </div>
+                    <!-- 搜索框 -->
+                    <div class="form-group">
+                        <input type="text" class="form-control"
+                               placeholder="搜索用户..."
+                               ng-model="assignedUsersData.searchKey">
+                    </div>
+                    <p class="text-muted">共 {{ assignedUsersData.users.length }} 个用户</p>
+                    <!-- 用户列表 -->
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        <div ng-show="assignedUsersData.loading" class="text-center">
+                            加载中...
+                        </div>
+                        <div ng-show="!assignedUsersData.loading">
+                            <div class="panel panel-default"
+                                 ng-repeat="user in assignedUsersData.users | filter:assignedUsersData.searchKey">
+                                <div class="panel-body">
+                                    <div class="row">
+                                        <div class="col-md-10">
+                                            <h5>
+                                                <span class="glyphicon glyphicon-user"></span>
+                                                <strong>{{ user.userId }}</strong>
+                                                <span class="text-muted" ng-if="user.name">({{ user.name }})</span>
+                                            </h5>
+                                            <small class="text-muted" ng-if="user.email">{{ user.email }}</small>
+                                            <br>
+                                            <small class="text-muted">
+                                                分配时间：{{ user.dataChangeCreatedTime | date:'yyyy-MM-dd HH:mm' }}
+                                            </small>
+                                        </div>
+                                        <div class="col-md-2 text-right">
+                                            <button type="button" class="btn btn-danger btn-sm"
+                                                    ng-click="removeUserFromTemplateInModal(user.userId)">
+                                                移除
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 空状态 -->
+                            <div ng-show="assignedUsersData.users.length === 0"
+                                 class="text-center text-muted">
+                                暂无用户
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 分配用户模态框 ==================== -->
+    <div class="modal fade" id="assignUsersModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                    <h4 class="modal-title">分配用户到角色模板</h4>
+                </div>
+                <div class="modal-body">
+                    <!-- 搜索框 -->
+                    <div class="form-group">
+                        <input type="text" class="form-control"
+                               placeholder="搜索用户ID、姓名或邮箱..."
+                               ng-model="assignUsersData.searchUserKey">
+                    </div>
+                    <!-- 全选 -->
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox"
+                                   ng-model="assignUsersData.selectAll"
+                                   ng-click="toggleSelectAll()">
+                            全选
+                        </label>
+                    </div>
+                    <!-- 用户列表 -->
+                    <div class="well" style="max-height: 400px; overflow-y: auto;">
+                        <div ng-show="assignUsersData.loadingUsers" class="text-center">
+                            加载中...
+                        </div>
+                        <div ng-show="!assignUsersData.loadingUsers">
+                            <div ng-repeat="user in searchUsers()">
+                                <label class="checkbox-inline">
+                                    <input type="checkbox"
+                                           ng-checked="isUserSelected(user)"
+                                           ng-click="toggleUserSelection(user)">
+                                    <span class="glyphicon glyphicon-user"></span>
+                                    <strong>{{ user.userId }}</strong>
+                                    <span class="text-muted" ng-if="user.name">({{ user.name }})</span>
+                                    <br>
+                                    <small class="text-muted" ng-if="user.email">{{ user.email }}</small>
+                                </label>
+                            </div>
+                            <div class="text-center text-muted"
+                                 ng-show="searchUsers().length === 0">
+                                没有找到用户
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-muted">
+                        已选择 {{ assignUsersData.selectedUsers.length }} 个用户
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" ng-click="cancelAssignUsers()">取消</button>
+                    <button type="button" class="btn btn-primary" ng-click="confirmAssignUsers()">确定</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div ng-include="'views/common/footer.html'"></div>
+
+<!-- 引入所有必要的JS文件 -->
+<script src="vendor/jquery.min.js" type="text/javascript"></script>
+<script src="vendor/angular/angular.min.js"></script>
+<script src="vendor/angular/angular-route.min.js"></script>
+<script src="vendor/angular/angular-resource.min.js"></script>
+<script src="vendor/angular/angular-toastr-1.4.1.tpls.min.js"></script>
+<script src="vendor/angular/loading-bar.min.js"></script>
+<script src="vendor/angular/angular-cookies.min.js"></script>
+<script src="vendor/angular/angular-translate.2.18.1/angular-translate.min.js"></script>
+<script src="vendor/angular/angular-translate.2.18.1/angular-translate-loader-static-files.min.js"></script>
+<script src="vendor/angular/angular-translate.2.18.1/angular-translate-storage-cookie.min.js"></script>
+<script src="vendor/valdr/valdr.min.js" type="text/javascript"></script>
+<script src="vendor/valdr/valdr-message.min.js" type="text/javascript"></script>
+<script src="vendor/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
+<script src="vendor/lodash.min.js"></script>
+<script src="vendor/select2/select2.min.js" type="text/javascript"></script>
+
+<script type="application/javascript" src="scripts/app.js"></script>
+<script type="application/javascript" src="scripts/services/AppService.js"></script>
+<script type="application/javascript" src="scripts/services/EnvService.js"></script>
+<script type="application/javascript" src="scripts/services/UserService.js"></script>
+<script type="application/javascript" src="scripts/services/CommonService.js"></script>
+<script type="application/javascript" src="scripts/services/PermissionService.js"></script>
+<script type="application/javascript" src="scripts/services/RoleTemplateService.js"></script>
+<script type="application/javascript" src="scripts/AppUtils.js"></script>
+<script type="application/javascript" src="scripts/PageCommon.js"></script>
+<script type="application/javascript" src="scripts/directive/directive.js"></script>
+<script type="application/javascript" src="scripts/valdr.js"></script>
+<script type="application/javascript" src="scripts/controller/role/RoleTemplateDetailController.js"></script>
+</body>
+
+</html>

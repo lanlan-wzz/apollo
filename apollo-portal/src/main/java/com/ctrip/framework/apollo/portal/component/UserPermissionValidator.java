@@ -21,6 +21,7 @@ import com.ctrip.framework.apollo.portal.component.config.PortalConfig;
 import com.ctrip.framework.apollo.portal.constant.PermissionType;
 import com.ctrip.framework.apollo.portal.service.AppNamespaceService;
 import com.ctrip.framework.apollo.portal.service.RolePermissionService;
+import com.ctrip.framework.apollo.portal.service.RoleTemplateService;
 import com.ctrip.framework.apollo.portal.service.SystemRoleManagerService;
 import com.ctrip.framework.apollo.portal.spi.UserInfoHolder;
 import com.ctrip.framework.apollo.portal.util.RoleUtils;
@@ -31,6 +32,7 @@ public class UserPermissionValidator implements PermissionValidator {
 
   private final UserInfoHolder userInfoHolder;
   private final RolePermissionService rolePermissionService;
+  private final RoleTemplateService roleTemplateService;  // 🆕 新增
   private final PortalConfig portalConfig;
   private final AppNamespaceService appNamespaceService;
   private final SystemRoleManagerService systemRoleManagerService;
@@ -38,32 +40,63 @@ public class UserPermissionValidator implements PermissionValidator {
   public UserPermissionValidator(
           final UserInfoHolder userInfoHolder,
           final RolePermissionService rolePermissionService,
+          final RoleTemplateService roleTemplateService,  // 🆕 新增注入
           final PortalConfig portalConfig,
           final AppNamespaceService appNamespaceService,
           final SystemRoleManagerService systemRoleManagerService) {
     this.userInfoHolder = userInfoHolder;
     this.rolePermissionService = rolePermissionService;
+    this.roleTemplateService = roleTemplateService;  // 🆕 新增
     this.portalConfig = portalConfig;
     this.appNamespaceService = appNamespaceService;
     this.systemRoleManagerService = systemRoleManagerService;
   }
 
+  // 🔧 修改：扩展权限检查，支持角色模板
+  /**
+   * 检查用户是否有某个权限（支持直接授权和角色模板授权）
+   */
+  private boolean userHasPermission(String userId, String permissionType, String targetId) {
+    // 1. 检查直接授权的权限（原有逻辑）
+    boolean hasDirectPermission = rolePermissionService.userHasPermission(
+            userId, permissionType, targetId
+    );
+
+    if (hasDirectPermission) {
+      return true;
+    }
+
+    // 2. 🆕 检查通过角色模板获得的权限
+    return roleTemplateService.userHasPermissionByTemplate(
+            userId, permissionType, targetId
+    );
+  }
+
+  // 🔧 修改：使用新的权限检查方法
   private boolean hasModifyNamespacePermission(String appId, String namespaceName) {
-    return rolePermissionService.userHasPermission(userInfoHolder.getUser().getUserId(),
-        PermissionType.MODIFY_NAMESPACE,
-        RoleUtils.buildNamespaceTargetId(appId, namespaceName));
+    return userHasPermission(
+            userInfoHolder.getUser().getUserId(),
+            PermissionType.MODIFY_NAMESPACE,
+            RoleUtils.buildNamespaceTargetId(appId, namespaceName)
+    );
   }
 
+  // 🔧 修改：使用新的权限检查方法
   private boolean hasModifyNamespacePermission(String appId, String namespaceName, String env) {
-    return rolePermissionService.userHasPermission(userInfoHolder.getUser().getUserId(),
-        PermissionType.MODIFY_NAMESPACE,
-        RoleUtils.buildNamespaceTargetId(appId, namespaceName, env));
+    return userHasPermission(
+            userInfoHolder.getUser().getUserId(),
+            PermissionType.MODIFY_NAMESPACE,
+            RoleUtils.buildNamespaceTargetId(appId, namespaceName, env)
+    );
   }
 
+  // 🔧 修改：使用新的权限检查方法
   private boolean hasModifyNamespacesInClusterPermission(String appId, String env, String clusterName) {
-    return rolePermissionService.userHasPermission(userInfoHolder.getUser().getUserId(),
-        PermissionType.MODIFY_NAMESPACES_IN_CLUSTER,
-        RoleUtils.buildClusterTargetId(appId, env, clusterName));
+    return userHasPermission(
+            userInfoHolder.getUser().getUserId(),
+            PermissionType.MODIFY_NAMESPACES_IN_CLUSTER,
+            RoleUtils.buildClusterTargetId(appId, env, clusterName)
+    );
   }
 
   @Override
@@ -80,22 +113,31 @@ public class UserPermissionValidator implements PermissionValidator {
     return false;
   }
 
+  // 🔧 修改：使用新的权限检查方法
   private boolean hasReleaseNamespacePermission(String appId, String namespaceName) {
-    return rolePermissionService.userHasPermission(userInfoHolder.getUser().getUserId(),
-        PermissionType.RELEASE_NAMESPACE,
-        RoleUtils.buildNamespaceTargetId(appId, namespaceName));
+    return userHasPermission(
+            userInfoHolder.getUser().getUserId(),
+            PermissionType.RELEASE_NAMESPACE,
+            RoleUtils.buildNamespaceTargetId(appId, namespaceName)
+    );
   }
 
+  // 🔧 修改：使用新的权限检查方法
   private boolean hasReleaseNamespacePermission(String appId, String namespaceName, String env) {
-    return rolePermissionService.userHasPermission(userInfoHolder.getUser().getUserId(),
-        PermissionType.RELEASE_NAMESPACE,
-        RoleUtils.buildNamespaceTargetId(appId, namespaceName, env));
+    return userHasPermission(
+            userInfoHolder.getUser().getUserId(),
+            PermissionType.RELEASE_NAMESPACE,
+            RoleUtils.buildNamespaceTargetId(appId, namespaceName, env)
+    );
   }
 
+  // 🔧 修改：使用新的权限检查方法
   private boolean hasReleaseNamespacesInClusterPermission(String appId, String env, String clusterName) {
-    return rolePermissionService.userHasPermission(userInfoHolder.getUser().getUserId(),
-        PermissionType.RELEASE_NAMESPACES_IN_CLUSTER,
-        RoleUtils.buildClusterTargetId(appId, env, clusterName));
+    return userHasPermission(
+            userInfoHolder.getUser().getUserId(),
+            PermissionType.RELEASE_NAMESPACES_IN_CLUSTER,
+            RoleUtils.buildClusterTargetId(appId, env, clusterName)
+    );
   }
 
   @Override
@@ -112,18 +154,24 @@ public class UserPermissionValidator implements PermissionValidator {
     return false;
   }
 
+  // 🔧 修改：使用新的权限检查方法
   @Override
   public boolean hasAssignRolePermission(String appId) {
-    return rolePermissionService.userHasPermission(userInfoHolder.getUser().getUserId(),
-        PermissionType.ASSIGN_ROLE,
-        appId);
+    return userHasPermission(
+            userInfoHolder.getUser().getUserId(),
+            PermissionType.ASSIGN_ROLE,
+            appId
+    );
   }
 
+  // 🔧 修改：使用新的权限检查方法
   @Override
   public boolean hasCreateNamespacePermission(String appId) {
-    return rolePermissionService.userHasPermission(userInfoHolder.getUser().getUserId(),
-        PermissionType.CREATE_NAMESPACE,
-        appId);
+    return userHasPermission(
+            userInfoHolder.getUser().getUserId(),
+            PermissionType.CREATE_NAMESPACE,
+            appId
+    );
   }
 
   @Override
@@ -138,11 +186,14 @@ public class UserPermissionValidator implements PermissionValidator {
     return isSuperAdmin();
   }
 
+  // 🔧 修改：使用新的权限检查方法
   @Override
   public boolean hasCreateClusterPermission(String appId) {
-    return rolePermissionService.userHasPermission(userInfoHolder.getUser().getUserId(),
-        PermissionType.CREATE_CLUSTER,
-        appId);
+    return userHasPermission(
+            userInfoHolder.getUser().getUserId(),
+            PermissionType.CREATE_CLUSTER,
+            appId
+    );
   }
 
   @Override
@@ -152,7 +203,7 @@ public class UserPermissionValidator implements PermissionValidator {
 
   @Override
   public boolean shouldHideConfigToCurrentUser(String appId, String env, String clusterName,
-      String namespaceName) {
+                                               String namespaceName) {
     // 1. check whether the current environment enables member only function
     if (!portalConfig.isConfigViewMemberOnly(env)) {
       return false;
@@ -181,8 +232,24 @@ public class UserPermissionValidator implements PermissionValidator {
   public boolean hasManageAppMasterPermission(String appId) {
     // the manage app master permission might not be initialized, so we need to check isSuperAdmin first
     return isSuperAdmin() ||
-        (hasAssignRolePermission(appId) &&
-         systemRoleManagerService.hasManageAppMasterPermission(userInfoHolder.getUser().getUserId(), appId)
-        );
+            (hasAssignRolePermission(appId) &&
+                    systemRoleManagerService.hasManageAppMasterPermission(userInfoHolder.getUser().getUserId(), appId)
+            );
+  }
+
+  // 🆕 新增方法：检查是否为应用管理员
+  public boolean isAppAdmin(String appId) {
+    return isSuperAdmin() || hasAssignRolePermission(appId);
+  }
+
+  // 🆕 新增方法：检查是否有操作命名空间的权限
+  public boolean hasOperateNamespacePermission(String appId, String env, String clusterName, String namespaceName) {
+    return hasModifyNamespacePermission(appId, env, clusterName, namespaceName)
+            || hasReleaseNamespacePermission(appId, env, clusterName, namespaceName);
+  }
+
+  // 🆕 新增方法：检查是否有删除命名空间的权限
+  public boolean hasDeleteNamespacePermission(String appId) {
+    return hasAssignRolePermission(appId) || isSuperAdmin();
   }
 }
