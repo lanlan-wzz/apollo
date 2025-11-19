@@ -28,6 +28,8 @@ function RoleTemplateDetailController($scope, $window, $location, $timeout, toas
         appLevel: {}
     };
     $scope.appSearchKey = '';
+    $scope.permissionMatrixCache = {};
+    $scope.permissionMatrixLoading = {};
 
     // 权限类型配置
     $scope.systemPermissionConfigs = {
@@ -138,6 +140,125 @@ function RoleTemplateDetailController($scope, $window, $location, $timeout, toas
             });
     }
 
+    function ensurePermissionMatrix(appId, onFinished) {
+        if (!appId) {
+            return;
+        }
+        if ($scope.permissionMatrixCache[appId]) {
+            if (onFinished) {
+                onFinished($scope.permissionMatrixCache[appId]);
+            }
+            return;
+        }
+        if ($scope.permissionMatrixLoading[appId]) {
+            if (onFinished) {
+                var unwatch = null;
+                unwatch = $scope.$watch(function () {
+                    return $scope.permissionMatrixLoading[appId];
+                }, function (loading) {
+                    if (!loading) {
+                        if (unwatch) {
+                            unwatch();
+                            unwatch = null;
+                        }
+                        onFinished($scope.permissionMatrixCache[appId]);
+                    }
+                });
+            }
+            return;
+        }
+        $scope.permissionMatrixLoading[appId] = true;
+        RoleTemplateService.get_permission_matrix(appId)
+            .then(function (matrix) {
+                $scope.permissionMatrixCache[appId] = enrichPermissionMatrix(matrix || {});
+                $scope.permissionMatrixLoading[appId] = false;
+                if (onFinished) {
+                    onFinished($scope.permissionMatrixCache[appId]);
+                }
+            }, function (reason) {
+                $scope.permissionMatrixLoading[appId] = false;
+                toastr.error(AppUtil.errorMsg(reason), '加载应用权限元数据失败');
+            });
+    }
+
+    function enrichPermissionMatrix(matrix) {
+        var envTargets = matrix.envTargets || [];
+        var namespaceIndex = {};
+        var clusterIndex = {};
+
+        envTargets.forEach(function (envTarget) {
+            var envName = envTarget.env;
+            var clusters = envTarget.clusters || [];
+            if (envName) {
+                clusterIndex[envName] = clusters.map(function (cluster) {
+                    return cluster.clusterName;
+                }).filter(function (name) {
+                    return !!name;
+                }).sort();
+            }
+            clusters.forEach(function (cluster) {
+                var namespaces = cluster.namespaces || [];
+                namespaces.forEach(function (ns) {
+                    if (!ns) {
+                        return;
+                    }
+                    if (!namespaceIndex[ns]) {
+                        namespaceIndex[ns] = {
+                            envs: []
+                        };
+                    }
+                    if (envName && namespaceIndex[ns].envs.indexOf(envName) === -1) {
+                        namespaceIndex[ns].envs.push(envName);
+                    }
+                });
+            });
+        });
+
+        Object.keys(namespaceIndex).forEach(function (key) {
+            namespaceIndex[key].envs.sort();
+        });
+
+        matrix.namespaceIndex = namespaceIndex;
+        matrix.clusterIndex = clusterIndex;
+        matrix.namespaceOptions = Object.keys(namespaceIndex).sort(function (a, b) {
+            return a.localeCompare(b);
+        });
+        matrix.clusterEnvOptions = Object.keys(clusterIndex).sort();
+        return matrix;
+    }
+
+    function getNamespaceOptions(appId) {
+        var matrix = $scope.permissionMatrixCache[appId];
+        if (!matrix || !matrix.namespaceOptions) {
+            return [];
+        }
+        return matrix.namespaceOptions;
+    }
+
+    function getNamespaceEnvOptions(appId, namespaceName) {
+        var matrix = $scope.permissionMatrixCache[appId];
+        if (!matrix || !matrix.namespaceIndex || !matrix.namespaceIndex[namespaceName]) {
+            return [];
+        }
+        return matrix.namespaceIndex[namespaceName].envs || [];
+    }
+
+    function getClusterEnvOptions(appId) {
+        var matrix = $scope.permissionMatrixCache[appId];
+        if (!matrix || !matrix.clusterEnvOptions) {
+            return [];
+        }
+        return matrix.clusterEnvOptions;
+    }
+
+    function getClusterOptions(appId, env) {
+        var matrix = $scope.permissionMatrixCache[appId];
+        if (!matrix || !matrix.clusterIndex || !matrix.clusterIndex[env]) {
+            return [];
+        }
+        return matrix.clusterIndex[env];
+    }
+
     // 初始化系统权限状态
     function initSystemPermissionStates(systemPermissions) {
         // 重置所有系统权限状态
@@ -215,6 +336,8 @@ function RoleTemplateDetailController($scope, $window, $location, $timeout, toas
                 $scope.selectedAppPermissions.appLevel[permType] = true;
             });
         }
+
+        ensurePermissionMatrix(app.appId);
     };
 
     // ==================== 系统权限管理 ====================
@@ -302,19 +425,44 @@ function RoleTemplateDetailController($scope, $window, $location, $timeout, toas
             return;
         }
 
-        $scope.addNamespaceData = {
-            appId: $scope.selectedApp.appId,
-            namespaceName: 'application',
-            env: '',
-            permissions: {
-                ModifyNamespace: false,
-                ReleaseNamespace: false
-            }
-        };
+        ensurePermissionMatrix($scope.selectedApp.appId, function () {
+            var namespaceOptions = getNamespaceOptions($scope.selectedApp.appId);
+            var defaultNamespace = namespaceOptions.length > 0 ? namespaceOptions[0] : 'application';
 
-        $timeout(function () {
-            $('#addNamespaceModal').modal('show');
+            $scope.addNamespaceData = {
+                appId: $scope.selectedApp.appId,
+                namespaceName: defaultNamespace,
+                env: '',
+                namespaceOptions: namespaceOptions,
+                availableEnvs: [],
+                permissions: {
+                    ModifyNamespace: false,
+                    ReleaseNamespace: false
+                }
+            };
+
+            updateNamespaceEnvOptionsInternal();
+
+            $timeout(function () {
+                $('#addNamespaceModal').modal('show');
+            });
         });
+    };
+
+    function updateNamespaceEnvOptionsInternal() {
+        if (!$scope.addNamespaceData) {
+            return;
+        }
+
+        var envOptions = getNamespaceEnvOptions($scope.addNamespaceData.appId, $scope.addNamespaceData.namespaceName);
+        $scope.addNamespaceData.availableEnvs = envOptions;
+        if ($scope.addNamespaceData.env && envOptions.indexOf($scope.addNamespaceData.env) === -1) {
+            $scope.addNamespaceData.env = '';
+        }
+    }
+
+    $scope.onNamespaceChange = function () {
+        updateNamespaceEnvOptionsInternal();
     };
 
     $scope.confirmAddNamespace = function () {
@@ -376,19 +524,43 @@ function RoleTemplateDetailController($scope, $window, $location, $timeout, toas
             return;
         }
 
-        $scope.addClusterData = {
-            appId: $scope.selectedApp.appId,
-            clusterName: 'default',
-            env: '',
-            permissions: {
-                ModifyNamespacesInCluster: false,
-                ReleaseNamespacesInCluster: false
-            }
-        };
+        ensurePermissionMatrix($scope.selectedApp.appId, function () {
+            var envOptions = getClusterEnvOptions($scope.selectedApp.appId);
+            var defaultEnv = envOptions.length > 0 ? envOptions[0] : '';
+            var clusterOptions = getClusterOptions($scope.selectedApp.appId, defaultEnv);
+            var defaultCluster = clusterOptions.length > 0 ? clusterOptions[0] : 'default';
 
-        $timeout(function () {
-            $('#addClusterModal').modal('show');
+            $scope.addClusterData = {
+                appId: $scope.selectedApp.appId,
+                clusterName: defaultCluster,
+                env: defaultEnv,
+                availableEnvs: envOptions,
+                clusterOptions: clusterOptions,
+                permissions: {
+                    ModifyNamespacesInCluster: false,
+                    ReleaseNamespacesInCluster: false
+                }
+            };
+
+            $timeout(function () {
+                $('#addClusterModal').modal('show');
+            });
         });
+    };
+
+    function refreshClusterOptions() {
+        if (!$scope.addClusterData) {
+            return;
+        }
+        var clusters = getClusterOptions($scope.addClusterData.appId, $scope.addClusterData.env);
+        $scope.addClusterData.clusterOptions = clusters;
+        if ($scope.addClusterData.clusterName && clusters.indexOf($scope.addClusterData.clusterName) === -1) {
+            $scope.addClusterData.clusterName = clusters.length > 0 ? clusters[0] : '';
+        }
+    }
+
+    $scope.onClusterEnvChange = function () {
+        refreshClusterOptions();
     };
 
     $scope.confirmAddCluster = function () {

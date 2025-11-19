@@ -53,6 +53,11 @@ appService.service('RoleTemplateService', ['$resource', '$q', 'AppUtil', functio
             method: 'GET',
             url: AppUtil.prefixPath() + '/role-templates/:templateName/permission-summary'
         },
+        // 权限矩阵
+        get_permission_matrix: {
+            method: 'GET',
+            url: AppUtil.prefixPath() + '/permissions/matrix/apps/:appId'
+        },
         // 分配用户到角色模板
         assign_users_to_template: {
             method: 'POST',
@@ -193,6 +198,18 @@ appService.service('RoleTemplateService', ['$resource', '$q', 'AppUtil', functio
             var d = $q.defer();
             role_template_resource.get_template_permission_summary({
                 templateName: templateName
+            }, function (result) {
+                d.resolve(result);
+            }, function (result) {
+                d.reject(result);
+            });
+            return d.promise;
+        },
+
+        get_permission_matrix: function (appId) {
+            var d = $q.defer();
+            role_template_resource.get_permission_matrix({
+                appId: appId
             }, function (result) {
                 d.resolve(result);
             }, function (result) {

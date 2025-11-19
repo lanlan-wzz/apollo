@@ -29,8 +29,10 @@ import com.ctrip.framework.apollo.portal.entity.vo.ClusterNamespaceRolesAssigned
 import com.ctrip.framework.apollo.portal.entity.vo.NamespaceEnvRolesAssignedUsers;
 import com.ctrip.framework.apollo.portal.entity.vo.NamespaceRolesAssignedUsers;
 import com.ctrip.framework.apollo.portal.entity.vo.PermissionCondition;
+import com.ctrip.framework.apollo.portal.entity.vo.PermissionMatrix;
 import com.ctrip.framework.apollo.portal.environment.Env;
 import com.ctrip.framework.apollo.portal.service.RoleInitializationService;
+import com.ctrip.framework.apollo.portal.service.PermissionMatrixService;
 import com.ctrip.framework.apollo.portal.service.RolePermissionService;
 import com.ctrip.framework.apollo.portal.service.SystemRoleManagerService;
 import com.ctrip.framework.apollo.portal.spi.UserInfoHolder;
@@ -56,6 +58,7 @@ public class PermissionController {
   private final RolePermissionService rolePermissionService;
   private final UserService userService;
   private final RoleInitializationService roleInitializationService;
+  private final PermissionMatrixService permissionMatrixService;
   private final SystemRoleManagerService systemRoleManagerService;
   private final UserPermissionValidator userPermissionValidator;
 
@@ -64,12 +67,14 @@ public class PermissionController {
           final RolePermissionService rolePermissionService,
           final UserService userService,
           final RoleInitializationService roleInitializationService,
+          final PermissionMatrixService permissionMatrixService,
           final SystemRoleManagerService systemRoleManagerService,
           final UserPermissionValidator userPermissionValidator) {
     this.userInfoHolder = userInfoHolder;
     this.rolePermissionService = rolePermissionService;
     this.userService = userService;
     this.roleInitializationService = roleInitializationService;
+    this.permissionMatrixService = permissionMatrixService;
     this.systemRoleManagerService = systemRoleManagerService;
     this.userPermissionValidator = userPermissionValidator;
   }
@@ -139,6 +144,11 @@ public class PermissionController {
     permissionCondition.setHasPermission(rolePermissionService.isSuperAdmin(userInfoHolder.getUser().getUserId()));
 
     return ResponseEntity.ok().body(permissionCondition);
+  }
+
+  @GetMapping("/permissions/matrix/apps/{appId}")
+  public PermissionMatrix loadPermissionMatrix(@PathVariable String appId) {
+    return permissionMatrixService.buildPermissionMatrix(appId);
   }
 
 
